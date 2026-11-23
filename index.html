@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lázaro Queiroz — terminal</title>
-<meta name="description" content="Portfólio interativo de Lázaro Queiroz do Nascimento: engenheiro de software, sistemas distribuídos, cache e DevOps. Digite 'ajuda'.">
+<meta name="description" content="Portfólio interativo (PT/EN) de Lázaro Queiroz do Nascimento: engenheiro de software, sistemas distribuídos, cache e DevOps. / Interactive portfolio of Lázaro Queiroz do Nascimento: software engineer, distributed systems, caching, DevOps.">
 <meta name="theme-color" content="#0a0f0a">
 <style>
 :root{--fg:#33ff66;--dim:#1f9940;--bg:#050a05;--glow:rgba(51,255,102,.55);--hl:#c8ffd6}
@@ -42,13 +42,16 @@ pre.jogo{margin:4px 0;line-height:1.1;font-size:15px;color:var(--fg)}
 .ctl{display:inline-grid;grid-template-columns:repeat(3,44px);gap:4px;margin:6px 0}
 .ctl button{height:38px;font:inherit;color:var(--fg);background:transparent;border:1px solid var(--dim);cursor:pointer}
 .ctl button:active{background:var(--fg);color:var(--bg)}
-.pular{position:absolute;top:10px;right:14px;z-index:7;font-size:12px;color:var(--dim)}
+.pular{position:absolute;top:10px;left:22px;z-index:7;font-size:12px;color:var(--dim)}
+#idioma{position:absolute;top:10px;right:22px;z-index:7;font:inherit;font-size:12px;color:var(--dim);background:var(--bg);border:1px solid var(--dim);border-radius:3px;padding:2px 7px;cursor:pointer;text-shadow:inherit}
+#idioma b{font-weight:400}#idioma b.on{color:var(--hl);font-weight:700}#idioma:hover,#idioma:focus-visible{outline:0;border-color:var(--fg)}
 @media(prefers-reduced-motion:reduce){#tela::after{animation:none}}
 </style>
 </head>
 <body>
 <main id="tela" data-tema="verde">
-  <div class="pular" id="dica">[ qualquer tecla: pular boot ]</div>
+  <div class="pular" id="dica"></div>
+  <button id="idioma" type="button"></button>
   <div id="rolagem" tabindex="-1">
     <div id="saida" aria-live="polite"></div>
     <div id="linha" hidden><span id="prompt"></span><input id="entrada" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Comando"></div>
@@ -60,7 +63,7 @@ pre.jogo{margin:4px 0;line-height:1.1;font-size:15px;color:var(--fg)}
 (()=>{
 "use strict";
 const $=s=>document.querySelector(s);
-const tela=$("#tela"),rol=$("#rolagem"),saida=$("#saida"),linha=$("#linha"),ent=$("#entrada"),pr=$("#prompt"),atalhos=$("#atalhos");
+const tela=$("#tela"),rol=$("#rolagem"),saida=$("#saida"),linha=$("#linha"),ent=$("#entrada"),pr=$("#prompt"),atalhos=$("#atalhos"),btnIdioma=$("#idioma");
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const dormir=ms=>new Promise(r=>setTimeout(r,ms));
 const reduzir=matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -68,176 +71,232 @@ const GH="https://github.com/LazaroQueiroz";
 const L=(u,t)=>`<a href="${u}" target="_blank" rel="noopener">${t||u}</a>`;
 const C=(c,t)=>`<span class="cmd" data-cmd="${c}">${t||c}</span>`;
 
+/* ---------- idioma ---------- */
+let lang="pt";
+try{const s=localStorage.getItem("lang");lang=s==="en"||s==="pt"?s:(/^pt/i.test(navigator.language||"")?"pt":"en")}catch(e){}
+const T=(pt,en)=>lang==="pt"?pt:en;
+const P=o=>o[lang]; // pega o texto do idioma atual em {pt,en}
+
+/* nomes dos comandos: canônico (chave de cmds) -> nome exibido em cada idioma */
+const NOME={
+ ajuda:{pt:"ajuda",en:"help"},sobre:{pt:"sobre",en:"about"},experiencia:{pt:"experiencia",en:"experience"},projetos:{pt:"projetos",en:"projects"},
+ projeto:{pt:"projeto",en:"project"},skills:{pt:"skills",en:"skills"},formacao:{pt:"formacao",en:"education"},contato:{pt:"contato",en:"contact"},
+ cv:{pt:"cv",en:"cv"},historia:{pt:"historia",en:"timeline"},ls:{pt:"ls",en:"ls"},cat:{pt:"cat",en:"cat"},neofetch:{pt:"neofetch",en:"neofetch"},
+ tema:{pt:"tema",en:"theme"},idioma:{pt:"idioma",en:"language"},jogar:{pt:"jogar",en:"play"},fortune:{pt:"fortune",en:"fortune"},limpar:{pt:"limpar",en:"clear"},
+ matrix:{pt:"matrix",en:"matrix"},ping:{pt:"ping",en:"ping"}
+};
+const ALIAS={}; // qualquer nome (pt ou en) -> chave canônica
+for(const[k,v]of Object.entries(NOME)){ALIAS[k]=k;ALIAS[v.pt]=k;ALIAS[v.en]=k}
+Object.assign(ALIAS,{help:"ajuda","?":"ajuda",exp:"experiencia",skill:"skills",lang:"idioma",idiom:"idioma",snake:"jogar",clear:"limpar",cls:"limpar",history:"historia",
+ ola:"hello",oi:"hello",hello:"hello",nvim:"vim"});
+const nm=k=>NOME[k][lang];
+
 /* ---------- conteúdo ---------- */
 const PROJ=[
- {id:"cache-simulator",nome:"Hierarchical Cache Simulator",tec:"Go · Sistemas distribuídos",url:null,
-  d:"Simulador determinístico de caches hierárquicos com políticas LRU, LFU e Ótima (Bélády). Processa mais de 56 milhões de requisições em menos de 3 minutos; goroutines e pipelines concorrentes cortaram ~75% do tempo de execução. Projeto do programa P&D UFCG–Nubank."},
- {id:"wvim",nome:"Wvim — editor modal",tec:"Haskell · Prolog",url:GH+"/wvim",
-  d:"Editor de texto inspirado no Vim, em Haskell e Prolog, com Piece Table, undo/redo persistente, vários buffers e modos de edição. Feito em equipe de 4 na disciplina de Paradigmas de Linguagem de Programação."},
- {id:"respiro",nome:"Respiro",tec:"Kotlin · Android · sem libs",url:GH+"/respiro",
-  d:"App Android para reduzir o tempo de tela: pausa respiratória antes de abrir redes sociais, versão web sem feed infinito e painel de uso. APK de ~190 KB, mais extensão para Chrome/Firefox."},
- {id:"gambit",nome:"gambit",tec:"Python · TUI · Stockfish",url:GH+"/gambit",
-  d:"Aprenda aberturas de xadrez no terminal: 3.865 linhas nomeadas, 83 lições escritas à mão, repetição espaçada, quiz e análise com Stockfish."},
- {id:"rota-do-edital",nome:"Rota do Edital",tec:"Python · JS · Kotlin/Compose",url:GH+"/rota-do-edital",
-  d:"App local e offline para estudo de concursos: envia o edital em PDF e recebe plano diário, aulas, revisões espaçadas e caderno de erros. Servidor só com biblioteca padrão, app Android nativo sincronizado por mesclagem a três vias."},
- {id:"diskclean",nome:"diskclean",tec:"Bash · Arch Linux",url:GH+"/diskclean",
-  d:"Script de limpeza de disco em camadas, dry-run por padrão, com modo interativo que mostra o impacto e o comando exato de cada ação."},
- {id:"key-listener",nome:"key-listener",tec:"C · systemd · Linux",url:GH+"/key-listener",
-  d:"Daemon leve em C que lê eventos de /dev/input e dispara scripts mapeados a teclas, rodando como serviço systemd."},
- {id:"kdvc",nome:"KDVC — presença por BLE",tec:"Kotlin · Bluetooth Low Energy",url:null,
-  d:"App Android de controle de presença por proximidade via BLE, com autenticação e validação por dispositivo para reduzir fraudes."},
- {id:"investment-wallet",nome:"Investment Wallet",tec:"Java · Spring Boot",url:null,
-  d:"API de gestão financeira estruturada com SOLID e padrões Factory, Observer e Singleton."},
- {id:"vtfd",nome:"VTFD",tec:"Python",url:GH+"/vtfd",d:"Virtual Translator For Dynamic Memory: tradutor virtual de endereços para memória dinâmica."},
- {id:"championship-app",nome:"championship_app",tec:"Python · CLI",url:GH+"/championship_app",d:"Gerenciador de campeonatos no terminal, com fase de grupos, mata-mata e estatísticas."},
- {id:"nvim-config",nome:"nvim-config",tec:"Lua/Vim",url:GH+"/nvim-config",d:"Minha configuração do Neovim."}
+ {id:"cache-simulator",nome:"Hierarchical Cache Simulator",tec:{pt:"Go · Sistemas distribuídos",en:"Go · Distributed systems"},url:null,
+  d:{pt:"Simulador determinístico de caches hierárquicos com políticas LRU, LFU e Ótima (Bélády). Processa mais de 56 milhões de requisições em menos de 3 minutos; goroutines e pipelines concorrentes cortaram ~75% do tempo de execução. Projeto do programa P&D UFCG–Nubank.",
+     en:"Deterministic simulator of hierarchical caches with LRU, LFU and Optimal (Bélády) policies. Processes 56M+ requests in under 3 minutes; goroutines and concurrent pipelines cut runtime by ~75%. Part of the UFCG–Nubank R&D program."}},
+ {id:"wvim",nome:{pt:"Wvim — editor modal",en:"Wvim — modal editor"},tec:{pt:"Haskell · Prolog",en:"Haskell · Prolog"},url:GH+"/wvim",
+  d:{pt:"Editor de texto inspirado no Vim, em Haskell e Prolog, com Piece Table, undo/redo persistente, vários buffers e modos de edição. Feito em equipe de 4 na disciplina de Paradigmas de Linguagem de Programação.",
+     en:"Vim-inspired text editor in Haskell and Prolog, with a Piece Table, persistent undo/redo, multiple buffers and editing modes. Built by a team of 4 for the Programming Language Paradigms course."}},
+ {id:"respiro",nome:"Respiro",tec:{pt:"Kotlin · Android · sem libs",en:"Kotlin · Android · no libs"},url:GH+"/respiro",
+  d:{pt:"App Android para reduzir o tempo de tela: pausa respiratória antes de abrir redes sociais, versão web sem feed infinito e painel de uso. APK de ~190 KB, mais extensão para Chrome/Firefox.",
+     en:"Android app to cut screen time: a breathing pause before opening social apps, a web version without infinite feeds, and a usage dashboard. ~190 KB APK, plus a Chrome/Firefox extension."}},
+ {id:"gambit",nome:"gambit",tec:{pt:"Python · TUI · Stockfish",en:"Python · TUI · Stockfish"},url:GH+"/gambit",
+  d:{pt:"Aprenda aberturas de xadrez no terminal: 3.865 linhas nomeadas, 83 lições escritas à mão, repetição espaçada, quiz e análise com Stockfish.",
+     en:"Learn chess openings in the terminal: 3,865 named lines, 83 hand-written lessons, spaced repetition, quizzes and Stockfish analysis."}},
+ {id:"rota-do-edital",nome:"Rota do Edital",tec:{pt:"Python · JS · Kotlin/Compose",en:"Python · JS · Kotlin/Compose"},url:GH+"/rota-do-edital",
+  d:{pt:"App local e offline para estudo de concursos: envia o edital em PDF e recebe plano diário, aulas, revisões espaçadas e caderno de erros. Servidor só com biblioteca padrão, app Android nativo sincronizado por mesclagem a três vias.",
+     en:"Local, offline study app for Brazilian public exams: upload the exam notice (PDF) and get a daily plan, lessons, spaced reviews and an error notebook. Standard-library-only server and a native Android app synced via three-way merge."}},
+ {id:"diskclean",nome:"diskclean",tec:{pt:"Bash · Arch Linux",en:"Bash · Arch Linux"},url:GH+"/diskclean",
+  d:{pt:"Script de limpeza de disco em camadas, dry-run por padrão, com modo interativo que mostra o impacto e o comando exato de cada ação.",
+     en:"Tiered disk cleanup script, dry-run by default, with an interactive mode that shows the impact and exact command of every action."}},
+ {id:"key-listener",nome:"key-listener",tec:{pt:"C · systemd · Linux",en:"C · systemd · Linux"},url:GH+"/key-listener",
+  d:{pt:"Daemon leve em C que lê eventos de /dev/input e dispara scripts mapeados a teclas, rodando como serviço systemd.",
+     en:"Lightweight C daemon that reads /dev/input events and triggers scripts mapped to keys, running as a systemd service."}},
+ {id:"kdvc",nome:{pt:"KDVC — presença por BLE",en:"KDVC — BLE attendance"},tec:{pt:"Kotlin · Bluetooth Low Energy",en:"Kotlin · Bluetooth Low Energy"},url:null,
+  d:{pt:"App Android de controle de presença por proximidade via BLE, com autenticação e validação por dispositivo para reduzir fraudes.",
+     en:"Android attendance app based on BLE proximity, with authentication and per-device validation to reduce spoofing."}},
+ {id:"investment-wallet",nome:"Investment Wallet",tec:{pt:"Java · Spring Boot",en:"Java · Spring Boot"},url:null,
+  d:{pt:"API de gestão financeira estruturada com SOLID e padrões Factory, Observer e Singleton.",
+     en:"Financial management API structured with SOLID and the Factory, Observer and Singleton patterns."}},
+ {id:"vtfd",nome:"VTFD",tec:{pt:"Python",en:"Python"},url:GH+"/vtfd",
+  d:{pt:"Virtual Translator For Dynamic Memory: tradutor virtual de endereços para memória dinâmica.",en:"Virtual Translator For Dynamic Memory."}},
+ {id:"championship-app",nome:"championship_app",tec:{pt:"Python · CLI",en:"Python · CLI"},url:GH+"/championship_app",
+  d:{pt:"Gerenciador de campeonatos no terminal, com fase de grupos, mata-mata e estatísticas.",en:"Terminal tournament manager with group stage, knockout rounds and statistics."}},
+ {id:"nvim-config",nome:"nvim-config",tec:{pt:"Lua/Vim",en:"Lua/Vim"},url:GH+"/nvim-config",d:{pt:"Minha configuração do Neovim.",en:"My Neovim configuration."}}
 ];
+const pnome=p=>typeof p.nome==="string"?p.nome:P(p.nome);
 const EXP=[
- {quando:"jan 2025 — hoje",cargo:"Engenheiro de Software",onde:"NuFuturo (P&D UFCG–Nubank)",itens:[
-  "Pesquisa e desenvolve sistemas de cache: políticas de remoção, comportamento de cargas, latência e vazão.",
-  "Backend de alto desempenho em Go e Clojure, com Datomic e PostgreSQL.",
-  "Simulador de cache: 56M+ requisições em <3 min; ~75% menos tempo com goroutines e channels.",
-  "Benchmarks em Linux e AWS EC2: volumes, escalonadores de I/O, strace, iostat, fio.",
-  "CI/CD com GitHub Actions e Tekton; revisão de PRs e padrões de governança."]},
- {quando:"set 2024 — hoje",cargo:"Desenvolvedor Web",onde:"NuFuturo / OCA — Observatório da Caatinga",itens:[
-  "React, Next.js, TypeScript e MapLibre GL: visualização geoespacial interativa.",
-  "Cache de tiles de mapa em TypeScript: ~85% menos latência (disco → memória).",
-  "Front-end ~30% mais rápido (imagens, minificação, cache).",
-  "Docker + Nginx + GitHub Actions + Route 53 na AWS; Contentful como CMS."]},
- {quando:"durante a graduação",cargo:"Monitor",onde:"UFCG",itens:[
-  "Programação I e Cálculo I/II: mais de 40 alunos atendidos, correção e materiais de apoio."]}
+ {quando:{pt:"jan 2025 — hoje",en:"Jan 2025 — present"},cargo:{pt:"Engenheiro de Software",en:"Software Engineer"},onde:{pt:"NuFuturo (P&D UFCG–Nubank)",en:"NuFuturo (UFCG–Nubank R&D)"},itens:{
+  pt:["Pesquisa e desenvolve sistemas de cache: políticas de remoção, comportamento de cargas, latência e vazão.",
+      "Backend de alto desempenho em Go e Clojure, com Datomic e PostgreSQL.",
+      "Simulador de cache: 56M+ requisições em <3 min; ~75% menos tempo com goroutines e channels.",
+      "Benchmarks em Linux e AWS EC2: volumes, escalonadores de I/O, strace, iostat, fio.",
+      "CI/CD com GitHub Actions e Tekton; revisão de PRs e padrões de governança."],
+  en:["Research and development of caching systems: eviction policies, workload behavior, latency and throughput.",
+      "High-performance backend in Go and Clojure, with Datomic and PostgreSQL.",
+      "Cache simulator: 56M+ requests in <3 min; ~75% less runtime with goroutines and channels.",
+      "Benchmarks on Linux and AWS EC2: volumes, I/O schedulers, strace, iostat, fio.",
+      "CI/CD with GitHub Actions and Tekton; PR reviews and governance standards."]}},
+ {quando:{pt:"set 2024 — hoje",en:"Sep 2024 — present"},cargo:{pt:"Desenvolvedor Web",en:"Web Developer"},onde:{pt:"NuFuturo / OCA — Observatório da Caatinga",en:"NuFuturo / OCA — Caatinga Observatory"},itens:{
+  pt:["React, Next.js, TypeScript e MapLibre GL: visualização geoespacial interativa.",
+      "Cache de tiles de mapa em TypeScript: ~85% menos latência (disco → memória).",
+      "Front-end ~30% mais rápido (imagens, minificação, cache).",
+      "Docker + Nginx + GitHub Actions + Route 53 na AWS; Contentful como CMS."],
+  en:["React, Next.js, TypeScript and MapLibre GL: interactive geospatial visualization.",
+      "Map tile cache in TypeScript: ~85% lower latency (disk → memory).",
+      "Front-end ~30% faster (images, minification, caching).",
+      "Docker + Nginx + GitHub Actions + Route 53 on AWS; Contentful as CMS."]}},
+ {quando:{pt:"encerrada",en:"ended"},cargo:{pt:"Monitor",en:"Teaching Assistant"},onde:{pt:"UFCG",en:"UFCG"},itens:{
+  pt:["Programação I e Cálculo I/II: mais de 40 alunos atendidos, correção e materiais de apoio."],
+  en:["Programming I and Calculus I/II: supported 40+ students, grading and supplementary materials."]}}
 ];
-const SKILLS={
- "Linguagens":"Go, Clojure, Python, Java, Kotlin, TypeScript, JavaScript, C, C++, Haskell, Prolog, SQL, Bash",
- "Web":"React, Next.js, Node.js, MapLibre GL, Spring Boot, Android/Compose",
- "Infra & DevOps":"AWS (EC2, Route 53, VPN), Docker, Kubernetes, Nginx, GitHub Actions, Tekton, Linux",
- "Dados":"PostgreSQL, Datomic, SQLite, Redis",
- "Sistemas":"Cache, concorrência, I/O e armazenamento, serialização/compressão, benchmarking",
- "Idiomas":"Português (nativo), Inglês (avançado profissional)"
-};
-const ARQ={
- "sobre.txt":()=>cmds.sobre(),"skills.txt":()=>cmds.skills(),"contato.txt":()=>cmds.contato(),
- "experiencia.log":()=>cmds.experiencia(),"formacao.txt":()=>cmds.formacao(),"projetos/":null
-};
+const SKILLS=[
+ [{pt:"Linguagens",en:"Languages"},"Go, Clojure, Python, Java, Kotlin, TypeScript, JavaScript, C, C++, Haskell, Prolog, SQL, Bash"],
+ [{pt:"Web",en:"Web"},"React, Next.js, Node.js, MapLibre GL, Spring Boot, Android/Compose"],
+ [{pt:"Infra & DevOps",en:"Infra & DevOps"},"AWS (EC2, Route 53, VPN), Docker, Kubernetes, Nginx, GitHub Actions, Tekton, Linux"],
+ [{pt:"Dados",en:"Data"},"PostgreSQL, Datomic, SQLite, Redis"],
+ [{pt:"Sistemas",en:"Systems"},{pt:"Cache, I/O e armazenamento, serialização/compressão, benchmarking",en:"Caching, I/O and storage, serialization/compression, benchmarking"}],
+ [{pt:"Idiomas",en:"Spoken"},{pt:"Português (nativo), Inglês (avançado profissional)",en:"Portuguese (native), English (advanced professional)"}]
+];
+/* arquivos: chave canônica -> comando que o imprime e nome em cada idioma */
+const ARQ=[
+ {k:"sobre",pt:"sobre.txt",en:"about.txt"},{k:"skills",pt:"skills.txt",en:"skills.txt"},{k:"contato",pt:"contato.txt",en:"contact.txt"},
+ {k:"experiencia",pt:"experiencia.log",en:"experience.log"},{k:"formacao",pt:"formacao.txt",en:"education.txt"}
+];
+const DIRP={pt:"projetos",en:"projects"};
 const BANNER=[" _      ___  ","| |    / _ \\","| |   | | | |","| |___| |_| |","|_____|\\__\\_\\"].join("\n");
+const TEMAS={verde:"verde",green:"verde",ambar:"ambar","âmbar":"ambar",amber:"ambar",branco:"branco",white:"branco",azul:"azul",blue:"azul"};
 
 /* ---------- saída ---------- */
 function imp(html,cls){const d=document.createElement("div");if(cls)d.className=cls;d.innerHTML=html;saida.appendChild(d);rol.scrollTop=rol.scrollHeight;return d}
 const nl=()=>imp("&nbsp;");
-async function digitar(html,ms=8){ // efeito de máquina de escrever (só texto simples)
-  if(reduzir||pulou){return imp(html)}
-  const d=imp("");const t=document.createElement("div");t.innerHTML=html;const txt=t.textContent;
-  for(let i=0;i<=txt.length;i++){d.textContent=txt.slice(0,i);rol.scrollTop=rol.scrollHeight;if(pulou)break;await dormir(ms)}
-  d.innerHTML=html;return d}
 
 /* ---------- comandos ---------- */
 const cmds={
  ajuda(){
-  imp(`<span class="hl">Comandos disponíveis</span> <span class="dim">(clique ou digite; Tab completa, ↑/↓ histórico)</span>`);
-  const l=[["sobre","quem sou eu"],["experiencia","onde trabalhei"],["projetos","lista de projetos (use: projeto &lt;nome&gt;)"],["skills","tecnologias"],["formacao","estudos e atividades"],
-   ["contato","como falar comigo"],["ls / cat","explore os arquivos"],["neofetch","info do 'sistema'"],["tema","verde | ambar | branco | azul"],
-   ["jogar","snake no terminal"],["fortune","uma frase aleatória"],["historia","linha do tempo"],["limpar","limpa a tela"],["cv","resumo para recrutadores"]];
-  l.forEach(([c,d])=>imp(`  ${C(c.split(" ")[0],c.padEnd(12))} <span class="dim">${d}</span>`));
-  imp(`<span class="dim">Dica: tem uns segredinhos escondidos por aí. 👀</span>`)},
- help(){cmds.ajuda()},
+  imp(`<span class="hl">${T("Comandos disponíveis","Available commands")}</span> <span class="dim">${T("(clique ou digite; Tab completa, ↑/↓ histórico)","(click or type; Tab completes, ↑/↓ history)")}</span>`);
+  const l=[["sobre",T("quem sou eu","who I am")],["experiencia",T("onde trabalhei","where I've worked")],["projetos",T("lista de projetos","project list")+` (${nm("projeto")} &lt;${T("nome","name")}&gt;)`],
+   ["skills",T("tecnologias","technologies")],["formacao",T("estudos e atividades","studies and activities")],["contato",T("como falar comigo","how to reach me")],
+   ["ls",T("explore os arquivos (ls, cat)","explore the files (ls, cat)")],["neofetch",T("info do 'sistema'","'system' info")],["tema",T("verde | ambar | branco | azul","green | amber | white | blue")],
+   ["idioma","português | english"],["jogar",T("snake no terminal","snake in the terminal")],["fortune",T("uma frase aleatória","a random quote")],
+   ["historia",T("linha do tempo","timeline")],["limpar",T("limpa a tela","clears the screen")],["cv",T("resumo para recrutadores","recruiter TL;DR")]];
+  l.forEach(([k,d])=>imp(`  ${C(nm(k),nm(k).padEnd(12))} <span class="dim">${d}</span>`));
+  imp(`<span class="dim">${T("Dica: tem uns segredinhos escondidos por aí. 👀","Hint: there are a few secrets hidden around. 👀")}</span>`)},
  sobre(){
   imp(`<span class="hl">Lázaro Queiroz do Nascimento</span>`);
-  imp(`Estudante de Ciência da Computação na UFCG (CRA 9,5/10) e engenheiro de software no NuFuturo, o programa de P&D entre UFCG e Nubank.`);
-  imp(`Gosto de sistemas que precisam ser rápidos: caches, I/O, concorrência, armazenamento e a infraestrutura em volta. Escrevo Go e Clojure no trabalho, e no tempo livre faço ferramentas de terminal, apps Android e coisas esquisitas como um editor em Haskell + Prolog.`);
-  imp(`Também sou monitor de Programação e Cálculo, então gosto de explicar o que faço.`);
-  imp(`<span class="dim">Próximos passos:</span> ${C("experiencia")} · ${C("projetos")} · ${C("contato")}`)},
+  imp(T("Estudante de Ciência da Computação na UFCG e engenheiro de software no NuFuturo, o programa de P&D entre UFCG e Nubank.",
+        "Computer Science student at UFCG and software engineer at NuFuturo, the UFCG–Nubank R&D program."));
+  imp(T("Gosto de sistemas que precisam ser rápidos: caches, I/O, armazenamento e a infraestrutura em volta. Escrevo Go e Clojure no trabalho, e no tempo livre faço ferramentas de terminal, apps Android e coisas esquisitas como um editor em Haskell + Prolog.",
+        "I like systems that have to be fast: caches, I/O, storage and the infrastructure around them. I write Go and Clojure at work, and in my spare time I build terminal tools, Android apps and odd things like an editor in Haskell + Prolog."));
+  imp(T("Já fui monitor de Programação e Cálculo, então gosto de explicar o que faço.","I used to be a teaching assistant for Programming and Calculus, so I like explaining what I do."));
+  imp(`<span class="dim">${T("Próximos passos:","Next:")}</span> ${C(nm("experiencia"))} · ${C(nm("projetos"))} · ${C(nm("contato"))}`)},
  experiencia(){
-  EXP.forEach(e=>{nl();imp(`<span class="hl">${esc(e.cargo)}</span> @ ${esc(e.onde)}`);imp(`<span class="dim">${esc(e.quando)}</span>`);e.itens.forEach(i=>imp(`  ▸ ${esc(i)}`))})},
- exp(){cmds.experiencia()},
+  EXP.forEach(e=>{nl();imp(`<span class="hl">${esc(P(e.cargo))}</span> @ ${esc(P(e.onde))}`);imp(`<span class="dim">${esc(P(e.quando))}</span>`);P(e.itens).forEach(i=>imp(`  ▸ ${esc(i)}`))})},
  projetos(){
-  imp(`<span class="hl">Projetos</span> <span class="dim">— digite</span> projeto &lt;nome&gt; <span class="dim">para detalhes</span>`);
-  PROJ.forEach(p=>imp(`  ${C("projeto "+p.id,p.id.padEnd(18))} <span class="dim">${esc(p.tec)}</span>`));
-  nl();imp(`<span class="dim">Todos os repositórios públicos:</span> ${L(GH+"?tab=repositories","github.com/LazaroQueiroz")}`)},
+  imp(`<span class="hl">${T("Projetos","Projects")}</span> <span class="dim">— ${T("digite","type")}</span> ${nm("projeto")} &lt;${T("nome","name")}&gt; <span class="dim">${T("para detalhes","for details")}</span>`);
+  PROJ.forEach(p=>imp(`  ${C(nm("projeto")+" "+p.id,p.id.padEnd(18))} <span class="dim">${esc(P(p.tec))}</span>`));
+  nl();imp(`<span class="dim">${T("Todos os repositórios públicos:","All public repositories:")}</span> ${L(GH+"?tab=repositories","github.com/LazaroQueiroz")}`)},
  projeto(a){
-  const p=PROJ.find(x=>x.id===(a[0]||"").toLowerCase()||x.nome.toLowerCase()===a.join(" ").toLowerCase());
   if(!a.length)return cmds.projetos();
-  if(!p)return imp(`projeto: '${esc(a.join(" "))}' não encontrado. Tente ${C("projetos")}.`,"err");
-  imp(`<span class="hl">${esc(p.nome)}</span>`);imp(`<span class="dim">${esc(p.tec)}</span>`);imp(esc(p.d));
-  imp(p.url?`Código: ${L(p.url)}`:`<span class="dim">(código privado ou institucional; posso explicar numa conversa)</span>`)},
+  const q=a.join(" ").toLowerCase();
+  const p=PROJ.find(x=>x.id===(a[0]||"").toLowerCase()||pnome(x).toLowerCase()===q);
+  if(!p)return imp(`${nm("projeto")}: '${esc(a.join(" "))}' ${T("não encontrado. Tente","not found. Try")} ${C(nm("projetos"))}.`,"err");
+  imp(`<span class="hl">${esc(pnome(p))}</span>`);imp(`<span class="dim">${esc(P(p.tec))}</span>`);imp(esc(P(p.d)));
+  imp(p.url?`${T("Código","Code")}: ${L(p.url)}`:`<span class="dim">${T("(código privado ou institucional; posso explicar numa conversa)","(private or institutional code; happy to walk through it in a chat)")}</span>`)},
  skills(){
   imp(`<span class="hl">Skills</span>`);
-  for(const[k,v]of Object.entries(SKILLS)){imp(`<span class="hl">${esc(k.padEnd(15))}</span> ${esc(v)}`)}
-  },
+  SKILLS.forEach(([k,v])=>imp(`<span class="hl">${esc(P(k).padEnd(15))}</span> ${esc(typeof v==="string"?v:P(v))}`))},
  formacao(){
-  imp(`<span class="hl">Bacharelado em Ciência da Computação</span> — UFCG`);
-  imp(`<span class="dim">jun 2023 — jun 2027 (previsto) · CRA 9,5/10</span>`);
-  imp(`  Sistemas Operacionais, Sistemas Distribuídos, Algoritmos, Estruturas de Dados, Banco de Dados, POO, Engenharia de Software.`);
-  nl();imp(`<span class="hl">Outras atividades</span>`);
-  imp(`  ▸ Monitoria: Programação I, Cálculo I, Cálculo II, Cálculo Vetorial`);
-  imp(`  ▸ OBI/OPI: medalha de bronze por equipe, classificado para a fase nacional`);
-  imp(`  ▸ TEAjudo (Campus Mobile): protótipo de plataforma de apoio a famílias de crianças autistas`)},
+  imp(`<span class="hl">${T("Bacharelado em Ciência da Computação","B.S. in Computer Science")}</span> — UFCG`);
+  imp(`<span class="dim">${T("jun 2023 — jun 2027 (previsto)","Jun 2023 — Jun 2027 (expected)")}</span>`);
+  imp("  "+T("Sistemas Operacionais, Sistemas Distribuídos, Algoritmos, Estruturas de Dados, Banco de Dados, POO, Engenharia de Software.",
+              "Operating Systems, Distributed Systems, Algorithms, Data Structures, Databases, OOP, Software Engineering."));
+  nl();imp(`<span class="hl">${T("Outras atividades","Other activities")}</span>`);
+  imp("  ▸ "+T("Monitoria (concluída): Programação I, Cálculo I e II","Teaching assistant (ended): Programming I, Calculus I and II"));
+  imp("  ▸ "+T("OBI/OPI: medalha de bronze por equipe, classificado para a fase nacional","OBI/OPI (Brazilian informatics olympiads): team bronze medal, qualified for the national phase"));
+  imp("  ▸ "+T("TEAjudo (Campus Mobile): protótipo de plataforma de apoio a famílias de crianças autistas","TEAjudo (Campus Mobile): prototype platform supporting families of autistic children"))},
  contato(){
-  imp(`<span class="hl">Vamos conversar?</span>`);
+  imp(`<span class="hl">${T("Vamos conversar?","Let's talk?")}</span>`);
   imp(`  GitHub    ${L(GH,"github.com/LazaroQueiroz")}`);
   imp(`  LinkedIn  ${L("https://linkedin.com/in/lazaro-queiroz-do-nascimento","linkedin.com/in/lazaro-queiroz-do-nascimento")}`);
   imp(`  E-mail    ${L("mailto:lazaro.queiroz.nascimento@ccc.ufcg.edu.br","lazaro.queiroz.nascimento@ccc.ufcg.edu.br")}`);
-  imp(`  Local     Campina Grande, PB — Brasil`)},
+  imp(`  ${T("Local    ","Location ")} Campina Grande, PB — ${T("Brasil","Brazil")}`)},
  cv(){
   imp(`<span class="hl">TL;DR</span>`);
-  imp(`  Engenheiro de Software · Go, Clojure, TypeScript · caches, I/O, AWS, CI/CD`);
-  imp(`  56M+ requisições simuladas em <3 min · −75% de tempo com concorrência · −85% de latência no cache de mapas`);
-  imp(`  UFCG · CRA 9,5 · formatura prevista 06/2027 · inglês avançado`)},
+  imp(T("  Engenheiro de Software · Go, Clojure, TypeScript · caches, I/O, AWS, CI/CD","  Software Engineer · Go, Clojure, TypeScript · caching, I/O, AWS, CI/CD"));
+  imp(T("  56M+ requisições simuladas em <3 min · −75% de tempo com concorrência · −85% de latência no cache de mapas","  56M+ requests simulated in <3 min · −75% runtime with concurrency · −85% latency on the map cache"));
+  imp(T("  UFCG · formatura prevista 06/2027 · inglês avançado","  UFCG · expected graduation 06/2027 · advanced English"))},
  historia(){
-  [["2023","Entro em Ciência da Computação na UFCG."],["2024","Começo no OCA e no NuFuturo (web, mapas, Docker); viro monitor."],
+  (lang==="pt"?[["2023","Entro em Ciência da Computação na UFCG."],["2024","Começo no OCA e no NuFuturo (web, mapas, Docker); sou monitor por um tempo."],
    ["2025","Engenheiro de software no P&D UFCG–Nubank: Go, Clojure, caches."],["2026","Apps Android, ferramentas de terminal e este site."],["2027","Formatura. E depois? Quem sabe uma conversa contigo?"]]
+  :[["2023","I start Computer Science at UFCG."],["2024","I join OCA and NuFuturo (web, maps, Docker); I'm a TA for a while."],
+   ["2025","Software engineer at the UFCG–Nubank R&D: Go, Clojure, caches."],["2026","Android apps, terminal tools and this site."],["2027","Graduation. And then? Maybe a chat with you?"]])
    .forEach(([a,t])=>imp(`<span class="hl">${a}</span> ─── ${esc(t)}`))},
  ls(a){
-  if(a[0]&&a[0].replace(/\/$/,"")==="projetos")return imp(PROJ.map(p=>C("cat projetos/"+p.id,p.id+".md")).join("  "));
-  imp(Object.keys(ARQ).map(f=>C(f.endsWith("/")?"ls "+f:"cat "+f,f)).join("  "))},
+  const d=(a[0]||"").replace(/\/$/,"");
+  if(d===DIRP.pt||d===DIRP.en)return imp(PROJ.map(p=>C("cat "+DIRP[lang]+"/"+p.id,p.id+".md")).join("  "));
+  imp(ARQ.map(f=>C("cat "+f[lang],f[lang])).join("  ")+"  "+C("ls "+DIRP[lang]+"/",DIRP[lang]+"/"))},
  cat(a){
   const f=(a[0]||"").replace(/^\.\//,"");
-  if(!f)return imp("uso: cat &lt;arquivo&gt;","err");
-  if(f.startsWith("projetos/")){return cmds.projeto([f.slice(9).replace(/\.md$/,"")])}
-  if(ARQ[f])return ARQ[f]();
-  if(f==="/etc/passwd")return imp("lazaro:x:1000:1000:Lázaro:/home/lazaro:/bin/zsh<br>(boa tentativa 😉)");
-  imp(`cat: ${esc(f)}: arquivo ou diretório inexistente`,"err")},
- cd(a){imp(a[0]?`cd: ${esc(a[0])}: aqui todo mundo fica em ~. Use ${C("ls")}.`:"~")},
+  if(!f)return imp(T("uso: cat &lt;arquivo&gt;","usage: cat &lt;file&gt;"),"err");
+  const m=f.match(/^(projetos|projects)\/(.*)$/);
+  if(m)return cmds.projeto([m[2].replace(/\.md$/,"")]);
+  const x=ARQ.find(y=>y.pt===f||y.en===f);if(x)return cmds[x.k]();
+  if(f==="/etc/passwd")return imp(T("lazaro:x:1000:1000:Lázaro:/home/lazaro:/bin/zsh<br>(boa tentativa 😉)","lazaro:x:1000:1000:Lázaro:/home/lazaro:/bin/zsh<br>(nice try 😉)"));
+  imp(`cat: ${esc(f)}: ${T("arquivo ou diretório inexistente","no such file or directory")}`,"err")},
+ cd(a){imp(a[0]?T(`cd: ${esc(a[0])}: aqui todo mundo fica em ~. Use ${C("ls")}.`,`cd: ${esc(a[0])}: everyone stays in ~ here. Use ${C("ls")}.`):"~")},
  pwd(){imp("/home/visitante/lazaro")},
- whoami(){imp("visitante (mas espero que vire contato 😄)")},
+ whoami(){imp(T("visitante (mas espero que vire contato 😄)","visitor (but I hope you become a contact 😄)"))},
  date(){imp(new Date().toString())},
  echo(a){imp(esc(a.join(" ")))},
  neofetch(){
   const up=Math.floor((Date.now()-T0)/1000);
-  const info=[`<span class="hl">lazaro</span>@<span class="hl">portfolio</span>`,"-----------------","SO: Arch Linux (btw)","Host: UFCG · Campina Grande","Kernel: curiosidade 6.0",
-   "Shell: zsh + neovim","Linguagens: Go, Clojure, TS, Py","Cargo: Eng. de Software","Uptime visita: "+up+"s","CRA: 9,5 / 10"];
+  const info=[`<span class="hl">lazaro</span>@<span class="hl">portfolio</span>`,"-----------------","OS: Arch Linux (btw)","Host: UFCG · Campina Grande",T("Kernel: curiosidade 6.0","Kernel: curiosity 6.0"),
+   "Shell: zsh + neovim",T("Linguagens: Go, Clojure, TS, Py","Languages: Go, Clojure, TS, Py"),T("Cargo: Eng. de Software","Role: Software Engineer"),T("Uptime da visita: ","Visit uptime: ")+up+"s"];
   const arte=["      /\\      ","     /  \\     ","    /\\   \\    ","   /      \\   ","  /   ,,   \\  "," /   |  |  -\\ ","/_-''    ''-_\\"];
   const n=Math.max(arte.length,info.length);let s="";
   for(let i=0;i<n;i++)s+=`<span class="hl">${esc((arte[i]||"").padEnd(17))}</span>${info[i]||""}\n`;
   imp(s.trimEnd())},
  tema(a){
-  const t=(a[0]||"").toLowerCase().replace("âmbar","ambar");
-  if(!["verde","ambar","branco","azul"].includes(t))return imp(`uso: tema ${["verde","ambar","branco","azul"].map(x=>C("tema "+x,x)).join(" | ")}`);
+  const t=TEMAS[(a[0]||"").toLowerCase()];
+  if(!t)return imp(`${T("uso","usage")}: ${nm("tema")} ${["verde","ambar","branco","azul"].map(x=>{const n=lang==="pt"?x:{verde:"green",ambar:"amber",branco:"white",azul:"blue"}[x];return C(nm("tema")+" "+n,n)}).join(" | ")}`);
   tela.dataset.tema=t;document.querySelector('meta[name=theme-color]').content=getComputedStyle(tela).getPropertyValue("--bg").trim();
-  try{localStorage.setItem("tema",t)}catch(e){}imp(`tema: ${t}`)},
- limpar(){saida.innerHTML=""},clear(){cmds.limpar()},cls(){cmds.limpar()},
+  try{localStorage.setItem("tema",t)}catch(e){}imp(`${nm("tema")}: ${esc(a[0].toLowerCase())}`)},
+ idioma(a){
+  const x=(a[0]||"").toLowerCase();
+  const alvo={pt:"pt","pt-br":"pt",portugues:"pt","português":"pt",en:"en",english:"en",ingles:"en","inglês":"en"}[x];
+  if(!alvo)return imp(`${T("uso","usage")}: ${nm("idioma")} ${C(nm("idioma")+" pt","pt")} | ${C(nm("idioma")+" en","en")}  <span class="dim">(${T("atual","current")}: ${lang})</span>`);
+  mudarIdioma(alvo)},
+ limpar(){saida.innerHTML=""},
  fortune(){
-  const f=["Cache é a arte de lembrar o que importa e esquecer o resto.","Existem duas coisas difíceis em computação: invalidar cache, nomear coisas e erros de off-by-one.","Prematura otimização é a raiz de todo mal. Medir antes é a raiz de todo bem.",
-   "Funciona na minha máquina. (Então vamos enviar a minha máquina.) — Docker","Todo sistema distribuído é um sistema onde a falha de uma máquina que você nem sabia que existia impede seu trabalho.","git commit -m 'arrumei'",
-   "Se está lento, é I/O. Se não é I/O, é I/O que você ainda não encontrou."];
+  const f=lang==="pt"?["Cache é a arte de lembrar o que importa e esquecer o resto.","Existem duas coisas difíceis em computação: invalidar cache, nomear coisas e erros de off-by-one.","Otimização prematura é a raiz de todo mal. Medir antes é a raiz de todo bem.",
+   "Funciona na minha máquina. (Então vamos enviar a minha máquina.) — Docker","Sistema distribuído é aquele em que a falha de uma máquina que você nem sabia que existia te impede de trabalhar.","git commit -m 'arrumei'",
+   "Se está lento, é I/O. Se não é I/O, é I/O que você ainda não encontrou."]
+  :["A cache is the art of remembering what matters and forgetting the rest.","There are two hard things in computer science: cache invalidation, naming things, and off-by-one errors.","Premature optimization is the root of all evil. Measuring first is the root of all good.",
+   "Works on my machine. (Then we'll ship your machine.) — Docker","A distributed system is one where the failure of a machine you didn't know existed stops you from getting work done.","git commit -m 'fixed stuff'",
+   "If it's slow, it's I/O. If it isn't I/O, it's I/O you haven't found yet."];
   imp(esc(f[Math.floor(Math.random()*f.length)]))},
- sudo(){imp("visitante não está no arquivo sudoers. Este incidente será reportado. 🚨","err")},
- rm(a){imp(a.join(" ").includes("-rf")?"rm: tentou mesmo, hein? Nada foi apagado. Nada foi apagado!":"rm: operação não permitida em portfólios","err")},
- vim(){imp("Você entrou no vim. Boa sorte para sair. (Dica: é só recarregar a página 😈) Ou conheça o "+C("projeto wvim","wvim")+".")},
- nvim(){cmds.vim()},exit(){imp("Não vá embora! Olha o "+C("contato")+" primeiro. 🙂")},
+ sudo(){imp(T("visitante não está no arquivo sudoers. Este incidente será reportado. 🚨","visitor is not in the sudoers file. This incident will be reported. 🚨"),"err")},
+ rm(a){imp(a.join(" ").includes("-rf")?T("rm: tentou mesmo, hein? Nada foi apagado. Nada foi apagado!","rm: really? Nothing was deleted. Nothing was deleted!"):T("rm: operação não permitida em portfólios","rm: operation not permitted on portfolios"),"err")},
+ vim(){imp(T("Você entrou no vim. Boa sorte para sair. (Dica: é só recarregar a página 😈) Ou conheça o ","You entered vim. Good luck getting out. (Hint: just reload the page 😈) Or check out ")+C(nm("projeto")+" wvim","wvim")+".")},
+ exit(){imp(T("Não vá embora! Olha o ","Don't leave! Check ")+C(nm("contato"))+T(" primeiro. 🙂"," first. 🙂"))},
  matrix(){chuva()},
- jogar(){snake()},snake(){snake()},
- ping(){imp("PONG — latência: ~85% menor que o cache de mapas anterior 😎")},
- hello(){imp("Olá! Digite "+C("ajuda")+" para começar.")},oi(){cmds.hello()},
- konami(){imp("↑ ↑ ↓ ↓ ← → ← → B A — você sabe das coisas. Que tal "+C("jogar")+"?")}
+ jogar(){snake()},
+ ping(){imp(T("PONG — latência: ~85% menor que o cache de mapas anterior 😎","PONG — latency: ~85% lower than the previous map cache 😎"))},
+ hello(){imp(T("Olá! Digite ","Hello! Type ")+C(nm("ajuda"))+T(" para começar."," to get started."))},
+ konami(){imp("↑ ↑ ↓ ↓ ← → ← → B A — "+T("você sabe das coisas. Que tal ","you know your stuff. How about ")+C(nm("jogar"))+"?")}
 };
-cmds.ola=cmds.hello;cmds["?"]=cmds.ajuda;cmds.about=cmds.sobre;cmds.projects=cmds.projetos;cmds.contact=cmds.contato;cmds.skill=cmds.skills;
-const NOMES=Object.keys(cmds).filter(c=>!["?","help","cls","clear","exp","skill","about","projects","contact","ola","hello","oi","nvim","konami"].includes(c));
+for(const k of Object.keys(cmds))if(!ALIAS[k])ALIAS[k]=k;
+const OCULTOS=new Set(["konami","hello","vim","cd","pwd","whoami","date","echo","sudo","rm","exit"]);
+const nomesAtuais=()=>Object.keys(cmds).filter(k=>!OCULTOS.has(k)).map(k=>NOME[k]?NOME[k][lang]:k);
 
 /* ---------- efeitos e jogo ---------- */
 let rodando=null; // loop do jogo/matrix
 function chuva(){
   const cv=document.createElement("canvas");cv.width=Math.min(640,rol.clientWidth-44);cv.height=200;cv.style.cssText="display:block;max-width:100%;border:1px solid var(--dim)";
-  const x=cv.getContext("2d");const cols=Math.floor(cv.width/12);const y=Array(cols).fill(0);const d=imp("");d.appendChild(cv);imp(`<span class="dim">(qualquer tecla para sair)</span>`);
+  const x=cv.getContext("2d");const cols=Math.floor(cv.width/12);const y=Array(cols).fill(0);const d=imp("");d.appendChild(cv);imp(`<span class="dim">${T("(qualquer tecla para sair)","(press any key to exit)")}</span>`);
   const cor=getComputedStyle(tela).getPropertyValue("--fg").trim();let n=0;
   rodando={tecla(){clearInterval(i);rodando=null},fim:true};
   const i=setInterval(()=>{x.fillStyle="rgba(0,0,0,.12)";x.fillRect(0,0,cv.width,cv.height);x.fillStyle=cor;x.font="12px monospace";
@@ -257,7 +316,9 @@ function snake(){
   function desenhar(){
     let s="┌"+"─".repeat(W)+"┐\n";
     for(let j=0;j<H;j++){s+="│";for(let i=0;i<W;i++){s+=cobra[0][0]===i&&cobra[0][1]===j?"@":cobra.some(p=>p[0]===i&&p[1]===j)?"o":comida[0]===i&&comida[1]===j?"*":" "}s+="│\n"}
-    pre.textContent=s+"└"+"─".repeat(W)+"┘";info.textContent=vivo?`pontos: ${pts}   recorde: ${rec}   (setas/WASD, q sai)`:`GAME OVER — ${pts} pontos${pts>rec?" · NOVO RECORDE!":""}. Digite 'jogar' para tentar de novo.`}
+    pre.textContent=s+"└"+"─".repeat(W)+"┘";
+    info.textContent=vivo?T(`pontos: ${pts}   recorde: ${rec}   (setas/WASD, q sai)`,`score: ${pts}   best: ${rec}   (arrows/WASD, q quits)`)
+      :T(`GAME OVER — ${pts} pontos${pts>rec?" · NOVO RECORDE!":""}. Digite 'jogar' para tentar de novo.`,`GAME OVER — ${pts} points${pts>rec?" · NEW RECORD!":""}. Type 'play' to try again.`)}
   function fim(){clearInterval(t);rodando=null;if(pts>rec){try{localStorage.setItem("snake",pts)}catch(e){}}desenhar();ent.focus()}
   function passo(){
     dir=prox;const c=[cobra[0][0]+dir[0],cobra[0][1]+dir[1]];
@@ -268,26 +329,48 @@ function snake(){
   const t=setInterval(passo,110);desenhar()}
 
 /* ---------- terminal ---------- */
-const T0=Date.now();let pulou=false,hist=[],hi=0;
-const PS=()=>"visitante@lazaro:~$";
+const T0=Date.now();let pulou=false,hist=[],hi=0,bootFeito=false;
+const PS=()=>T("visitante","visitor")+"@lazaro:~$";
 function mostrarPrompt(){pr.textContent=PS();linha.hidden=false;ent.focus({preventScroll:true});rol.scrollTop=rol.scrollHeight}
 async function executar(txt){
   const bruto=txt.trim();
-  imp(`<span class="hl">${PS()}</span> ${esc(txt)}`);
+  imp(`<span class="hl">${esc(PS())}</span> ${esc(txt)}`);
   if(!bruto)return;
   hist.push(bruto);hi=hist.length;
-  const [c,...a]=bruto.split(/\s+/);const f=cmds[c.toLowerCase()];
-  if(Object.prototype.hasOwnProperty.call(cmds,c.toLowerCase())&&typeof f==="function")f(a);
-  else{const sug=NOMES.filter(n=>n.startsWith(c.toLowerCase().slice(0,2)))[0];imp(`${esc(c)}: comando não encontrado. ${sug?`Quis dizer ${C(sug)}? `:""}Digite ${C("ajuda")}.`,"err")}
+  const [c,...a]=bruto.split(/\s+/);const k=ALIAS[c.toLowerCase()];
+  if(k&&Object.prototype.hasOwnProperty.call(cmds,k))cmds[k](a);
+  else{const sug=nomesAtuais().find(n=>n.startsWith(c.toLowerCase().slice(0,2)));
+    imp(`${esc(c)}: ${T("comando não encontrado.","command not found.")} ${sug?`${T("Quis dizer","Did you mean")} ${C(sug)}? `:""}${T("Digite","Type")} ${C(nm("ajuda"))}.`,"err")}
 }
+function montarAtalhos(){
+  atalhos.textContent="";
+  ["sobre","experiencia","projetos","skills","contato","ajuda"].map(k=>[nm(k),nm(k)]).concat([[T("tema azul","theme blue"),T("tema azul","theme blue")]]).forEach(([t,c])=>{
+    const b=document.createElement("button");b.textContent=t;b.onclick=()=>{if(!bootFeito){pulou=true;return}if(rodando)return;executar(c);ent.focus({preventScroll:true})};atalhos.appendChild(b)})}
+function aplicarIdioma(){
+  document.documentElement.lang=lang==="pt"?"pt-BR":"en";
+  btnIdioma.innerHTML=`<b${lang==="pt"?' class="on"':""}>PT</b>|<b${lang==="en"?' class="on"':""}>EN</b>`;
+  btnIdioma.setAttribute("aria-label",T("Mudar idioma para inglês","Switch language to Portuguese"));
+  $("#dica").textContent=T("[ qualquer tecla: pular boot ]","[ any key: skip boot ]");
+  ent.setAttribute("aria-label",T("Comando","Command"));
+  document.title=T("Lázaro Queiroz — terminal","Lázaro Queiroz — terminal");
+  if(bootFeito)pr.textContent=PS();
+  montarAtalhos()}
+function mudarIdioma(novo){
+  if(novo===lang)return imp(T("O idioma já é português.","Language is already English."));
+  lang=novo;try{localStorage.setItem("lang",lang)}catch(e){}aplicarIdioma();
+  saida.innerHTML="";boasVindas();imp(T("Idioma: português.","Language: English."),"dim")}
+btnIdioma.addEventListener("click",()=>{if(!bootFeito){pulou=true}if(rodando)return;mudarIdioma(lang==="pt"?"en":"pt");ent.focus({preventScroll:true})});
+
 ent.addEventListener("keydown",e=>{
-  if(rodando){e.preventDefault();rodando.tecla&&rodando.tecla(e);if(rodando&&rodando.fim)return;return}
+  if(rodando){e.preventDefault();rodando.tecla&&rodando.tecla(e);return}
   if(e.key==="Enter"){const v=ent.value;ent.value="";executar(v)}
   else if(e.key==="ArrowUp"){e.preventDefault();if(hi>0){hi--;ent.value=hist[hi]}}
   else if(e.key==="ArrowDown"){e.preventDefault();if(hi<hist.length-1){hi++;ent.value=hist[hi]}else{hi=hist.length;ent.value=""}}
   else if(e.key==="Tab"){e.preventDefault();const p=ent.value.split(/\s+/);
-    if(p.length===1){const m=NOMES.filter(n=>n.startsWith(p[0].toLowerCase()));if(m.length===1)ent.value=m[0]+" ";else if(m.length>1)imp(m.join("  "),"dim")}
-    else if(p[0]==="projeto"||p[0]==="cat"){const base=p[0]==="cat"?PROJ.map(x=>"projetos/"+x.id).concat(Object.keys(ARQ)):PROJ.map(x=>x.id);const m=base.filter(n=>n.startsWith(p[1]||""));if(m.length===1)ent.value=p[0]+" "+m[0];else if(m.length>1)imp(m.join("  "),"dim")}}
+    if(p.length===1){const m=nomesAtuais().filter(n=>n.startsWith(p[0].toLowerCase()));if(m.length===1)ent.value=m[0]+" ";else if(m.length>1)imp(m.join("  "),"dim")}
+    else{const k=ALIAS[p[0].toLowerCase()];
+      if(k==="projeto"||k==="cat"){const base=k==="cat"?PROJ.map(x=>DIRP[lang]+"/"+x.id).concat(ARQ.map(f=>f[lang])):PROJ.map(x=>x.id);const m=base.filter(n=>n.startsWith(p[1]||""));if(m.length===1)ent.value=p[0]+" "+m[0];else if(m.length>1)imp(m.join("  "),"dim")}
+      else if(k==="idioma"){ent.value=p[0]+" "+(lang==="pt"?"en":"pt")}}}
   else if(e.key==="l"&&e.ctrlKey){e.preventDefault();cmds.limpar()}
 });
 document.addEventListener("keydown",e=>{
@@ -297,21 +380,24 @@ document.addEventListener("keydown",e=>{
 saida.addEventListener("click",e=>{const c=e.target.closest(".cmd");if(c&&!rodando){executar(c.dataset.cmd)}});
 tela.addEventListener("pointerdown",e=>{if(!bootFeito)pulou=true});
 tela.addEventListener("click",e=>{if(bootFeito&&!getSelection().toString()&&!e.target.closest("a,button,.cmd"))ent.focus({preventScroll:true})});
-["sobre","experiencia","projetos","skills","contato","ajuda","tema azul"].forEach(c=>{const b=document.createElement("button");b.textContent=c;b.onclick=()=>{if(!bootFeito){pulou=true;return}if(rodando){return}executar(c);ent.focus({preventScroll:true})};atalhos.appendChild(b)});
 
-let bootFeito=false;
+function boasVindas(){
+  imp(`<span class="hl">${esc(BANNER)}</span>`);
+  imp(`<span class="hl">Lázaro Queiroz do Nascimento</span> <span class="dim">— ${T("Engenheiro de Software","Software Engineer")} · UFCG</span>`);
+  imp(`<span class="dim">${T("Sistemas distribuídos · caches · Go · Clojure · DevOps","Distributed systems · caching · Go · Clojure · DevOps")}</span>`);
+  nl();imp(`${T("Bem-vindo(a)! Digite","Welcome! Type")} ${C(nm("ajuda"))} ${T("ou clique em um comando:","or click a command:")} ${C(nm("sobre"))} · ${C(nm("projetos"))} · ${C(nm("experiencia"))} · ${C(nm("contato"))}`);
+  imp(`<span class="dim">${T("English? Clique em EN no canto ou digite","Português? Click PT at the corner or type")} ${C(nm("idioma")+" "+T("en","pt"))}</span>`);nl()}
 async function boot(){
-  try{const t=localStorage.getItem("tema");if(t)tela.dataset.tema=t}catch(e){}
-  const linhas=["LQ-BIOS v2.7  (C) 2026 Lázaro Queiroz Systems","CPU: Go-486DX @ 66MHz ........ OK","Memória: 640K ................. OK  (deveria bastar)",
-   "Cache L1/L2 (LRU, LFU, ÓTIMO) . OK","Montando /home/lazaro ......... OK","Carregando projetos ........... OK","Conectando à internet ......... 56k modem 📞 OK"];
+  try{const t=localStorage.getItem("tema");if(t&&["verde","ambar","branco","azul"].includes(t))tela.dataset.tema=t}catch(e){}
+  aplicarIdioma();
+  const linhas=lang==="pt"
+   ?["LQ-BIOS v2.7  (C) 2026 Lázaro Queiroz Systems","CPU: Go-486DX @ 66MHz ........ OK","Memória: 640K ................. OK  (deveria bastar)","Cache L1/L2 (LRU, LFU, ÓTIMO) . OK","Montando /home/lazaro ......... OK","Carregando projetos ........... OK","Conectando à internet ......... 56k modem 📞 OK"]
+   :["LQ-BIOS v2.7  (C) 2026 Lázaro Queiroz Systems","CPU: Go-486DX @ 66MHz ........ OK","Memory: 640K .................. OK  (should be enough)","Cache L1/L2 (LRU, LFU, OPT) .. OK","Mounting /home/lazaro ......... OK","Loading projects .............. OK","Connecting to internet ........ 56k modem 📞 OK"];
   if(!pulou&&!reduzir)for(const l of linhas){imp(esc(l));await dormir(pulou?0:230)}
   else linhas.forEach(l=>imp(esc(l)));
-  nl();imp(`<span class="hl">${esc(BANNER)}</span>`);
-  imp(`<span class="hl">Lázaro Queiroz do Nascimento</span> <span class="dim">— Engenheiro de Software · UFCG</span>`);
-  imp(`<span class="dim">Sistemas distribuídos · caches · Go · Clojure · DevOps</span>`);
-  nl();imp(`Bem-vindo(a)! Digite ${C("ajuda")} ou clique em um comando: ${C("sobre")} · ${C("projetos")} · ${C("experiencia")} · ${C("contato")}`);nl();
+  nl();boasVindas();
   bootFeito=true;$("#dica").hidden=true;mostrarPrompt();
-  const q=decodeURIComponent(location.hash.slice(1));if(q&&cmds[q.split(" ")[0]])executar(q)}
+  const q=decodeURIComponent(location.hash.slice(1));if(q&&ALIAS[q.split(" ")[0].toLowerCase()])executar(q)}
 boot();
 })();
 </script>
