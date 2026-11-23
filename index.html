@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lázaro Queiroz — terminal</title>
+<meta name="description" content="Portfólio interativo de Lázaro Queiroz do Nascimento: engenheiro de software, sistemas distribuídos, cache e DevOps. Digite 'ajuda'.">
+<meta name="theme-color" content="#0a0f0a">
+<style>
+:root{--fg:#33ff66;--dim:#1f9940;--bg:#050a05;--glow:rgba(51,255,102,.55);--hl:#c8ffd6}
+[data-tema=ambar]{--fg:#ffb000;--dim:#a06f00;--bg:#0b0700;--glow:rgba(255,176,0,.55);--hl:#ffe0a0}
+[data-tema=branco]{--fg:#d8d8d8;--dim:#7a7a7a;--bg:#0a0a0c;--glow:rgba(220,220,220,.35);--hl:#ffffff}
+[data-tema=azul]{--fg:#9ad1ff;--dim:#4a7fb0;--bg:#000a1f;--glow:rgba(120,190,255,.5);--hl:#e0f2ff}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:#000}
+body{display:flex;align-items:center;justify-content:center;font-family:"IBM Plex Mono","VT323","Courier New",ui-monospace,monospace}
+#tela{position:relative;width:min(1100px,100vw);height:min(760px,100dvh);background:var(--bg);color:var(--fg);
+  text-shadow:0 0 6px var(--glow);overflow:hidden;border-radius:18px;
+  box-shadow:0 0 0 10px #1a1a18,0 0 0 12px #000,0 0 60px var(--glow),inset 0 0 120px rgba(0,0,0,.7)}
+@media(max-width:700px){#tela{border-radius:0;box-shadow:inset 0 0 80px rgba(0,0,0,.7);width:100vw;height:100dvh}}
+#tela::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:5;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 1px,transparent 1px 3px);mix-blend-mode:multiply}
+#tela::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:6;
+  background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.55) 100%);animation:flick 4s infinite}
+@keyframes flick{0%,100%{opacity:1}50%{opacity:.93}52%{opacity:1}}
+#rolagem{position:absolute;inset:0 0 44px 0;overflow-y:auto;padding:18px 22px 8px;font-size:15px;line-height:1.45;scrollbar-width:thin;scrollbar-color:var(--dim) transparent}
+@media(max-width:700px){#rolagem{font-size:13px;padding:12px 12px 6px}}
+#saida>div{white-space:pre-wrap;word-break:break-word;min-height:1.45em}
+.dim{color:var(--dim)}.hl{color:var(--hl);font-weight:700}.err{color:#ff6b6b;text-shadow:0 0 6px rgba(255,80,80,.5)}
+a{color:var(--hl);text-decoration:underline dotted}a:hover{background:var(--fg);color:var(--bg);text-shadow:none}
+.cmd{color:var(--hl);cursor:pointer;text-decoration:underline;text-decoration-style:dotted}
+.cmd:hover{background:var(--fg);color:var(--bg);text-shadow:none}
+.box{border:1px solid var(--dim);padding:6px 10px;margin:4px 0;display:inline-block;max-width:100%}
+#linha{display:flex;align-items:center;gap:.6ch}
+#prompt{white-space:pre;color:var(--hl)}
+#entrada{flex:1;min-width:0;background:transparent;border:0;outline:0;color:var(--fg);font:inherit;text-shadow:inherit;caret-color:var(--fg);caret-shape:block;padding:0}
+#atalhos{position:absolute;left:0;right:0;bottom:0;height:44px;display:flex;gap:6px;align-items:center;padding:0 12px;overflow-x:auto;
+  border-top:1px solid var(--dim);background:var(--bg);z-index:4;scrollbar-width:none}
+#atalhos button{flex:none;font:inherit;font-size:13px;color:var(--fg);background:transparent;border:1px solid var(--dim);border-radius:3px;padding:4px 9px;cursor:pointer;text-shadow:inherit}
+#atalhos button:hover,#atalhos button:focus-visible{background:var(--fg);color:var(--bg);text-shadow:none;outline:0}
+pre.jogo{margin:4px 0;line-height:1.1;font-size:15px;color:var(--fg)}
+.ctl{display:inline-grid;grid-template-columns:repeat(3,44px);gap:4px;margin:6px 0}
+.ctl button{height:38px;font:inherit;color:var(--fg);background:transparent;border:1px solid var(--dim);cursor:pointer}
+.ctl button:active{background:var(--fg);color:var(--bg)}
+.pular{position:absolute;top:10px;right:14px;z-index:7;font-size:12px;color:var(--dim)}
+@media(prefers-reduced-motion:reduce){#tela::after{animation:none}}
+</style>
+</head>
+<body>
+<main id="tela" data-tema="verde">
+  <div class="pular" id="dica">[ qualquer tecla: pular boot ]</div>
+  <div id="rolagem" tabindex="-1">
+    <div id="saida" aria-live="polite"></div>
+    <div id="linha" hidden><span id="prompt"></span><input id="entrada" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Comando"></div>
+  </div>
+  <nav id="atalhos" aria-label="Atalhos de comando"></nav>
+</main>
+<noscript><p style="color:#9f9;font-family:monospace;padding:2em">Este portfólio é um terminal e precisa de JavaScript. Em resumo: Lázaro Queiroz do Nascimento, engenheiro de software (Go, Clojure, TypeScript), UFCG. github.com/LazaroQueiroz</p></noscript>
+<script>
+(()=>{
+"use strict";
+const $=s=>document.querySelector(s);
+const tela=$("#tela"),rol=$("#rolagem"),saida=$("#saida"),linha=$("#linha"),ent=$("#entrada"),pr=$("#prompt"),atalhos=$("#atalhos");
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const dormir=ms=>new Promise(r=>setTimeout(r,ms));
+const reduzir=matchMedia("(prefers-reduced-motion: reduce)").matches;
+const GH="https://github.com/LazaroQueiroz";
+const L=(u,t)=>`<a href="${u}" target="_blank" rel="noopener">${t||u}</a>`;
+const C=(c,t)=>`<span class="cmd" data-cmd="${c}">${t||c}</span>`;
+
+/* ---------- conteúdo ---------- */
+const PROJ=[
+ {id:"cache-simulator",nome:"Hierarchical Cache Simulator",tec:"Go · Sistemas distribuídos",url:null,
+  d:"Simulador determinístico de caches hierárquicos com políticas LRU, LFU e Ótima (Bélády). Processa mais de 56 milhões de requisições em menos de 3 minutos; goroutines e pipelines concorrentes cortaram ~75% do tempo de execução. Projeto do programa P&D UFCG–Nubank."},
+ {id:"wvim",nome:"Wvim — editor modal",tec:"Haskell · Prolog",url:GH+"/wvim",
+  d:"Editor de texto inspirado no Vim, em Haskell e Prolog, com Piece Table, undo/redo persistente, vários buffers e modos de edição. Feito em equipe de 4 na disciplina de Paradigmas de Linguagem de Programação."},
+ {id:"respiro",nome:"Respiro",tec:"Kotlin · Android · sem libs",url:GH+"/respiro",
+  d:"App Android para reduzir o tempo de tela: pausa respiratória antes de abrir redes sociais, versão web sem feed infinito e painel de uso. APK de ~190 KB, mais extensão para Chrome/Firefox."},
+ {id:"gambit",nome:"gambit",tec:"Python · TUI · Stockfish",url:GH+"/gambit",
+  d:"Aprenda aberturas de xadrez no terminal: 3.865 linhas nomeadas, 83 lições escritas à mão, repetição espaçada, quiz e análise com Stockfish."},
+ {id:"rota-do-edital",nome:"Rota do Edital",tec:"Python · JS · Kotlin/Compose",url:GH+"/rota-do-edital",
+  d:"App local e offline para estudo de concursos: envia o edital em PDF e recebe plano diário, aulas, revisões espaçadas e caderno de erros. Servidor só com biblioteca padrão, app Android nativo sincronizado por mesclagem a três vias."},
+ {id:"diskclean",nome:"diskclean",tec:"Bash · Arch Linux",url:GH+"/diskclean",
+  d:"Script de limpeza de disco em camadas, dry-run por padrão, com modo interativo que mostra o impacto e o comando exato de cada ação."},
+ {id:"key-listener",nome:"key-listener",tec:"C · systemd · Linux",url:GH+"/key-listener",
+  d:"Daemon leve em C que lê eventos de /dev/input e dispara scripts mapeados a teclas, rodando como serviço systemd."},
+ {id:"kdvc",nome:"KDVC — presença por BLE",tec:"Kotlin · Bluetooth Low Energy",url:null,
+  d:"App Android de controle de presença por proximidade via BLE, com autenticação e validação por dispositivo para reduzir fraudes."},
+ {id:"investment-wallet",nome:"Investment Wallet",tec:"Java · Spring Boot",url:null,
+  d:"API de gestão financeira estruturada com SOLID e padrões Factory, Observer e Singleton."},
+ {id:"vtfd",nome:"VTFD",tec:"Python",url:GH+"/vtfd",d:"Virtual Translator For Dynamic Memory: tradutor virtual de endereços para memória dinâmica."},
+ {id:"championship-app",nome:"championship_app",tec:"Python · CLI",url:GH+"/championship_app",d:"Gerenciador de campeonatos no terminal, com fase de grupos, mata-mata e estatísticas."},
+ {id:"nvim-config",nome:"nvim-config",tec:"Lua/Vim",url:GH+"/nvim-config",d:"Minha configuração do Neovim."}
+];
+const EXP=[
+ {quando:"jan 2025 — hoje",cargo:"Engenheiro de Software",onde:"NuFuturo (P&D UFCG–Nubank)",itens:[
+  "Pesquisa e desenvolve sistemas de cache: políticas de remoção, comportamento de cargas, latência e vazão.",
+  "Backend de alto desempenho em Go e Clojure, com Datomic e PostgreSQL.",
+  "Simulador de cache: 56M+ requisições em <3 min; ~75% menos tempo com goroutines e channels.",
+  "Benchmarks em Linux e AWS EC2: volumes, escalonadores de I/O, strace, iostat, fio.",
+  "CI/CD com GitHub Actions e Tekton; revisão de PRs e padrões de governança."]},
+ {quando:"set 2024 — hoje",cargo:"Desenvolvedor Web",onde:"NuFuturo / OCA — Observatório da Caatinga",itens:[
+  "React, Next.js, TypeScript e MapLibre GL: visualização geoespacial interativa.",
+  "Cache de tiles de mapa em TypeScript: ~85% menos latência (disco → memória).",
+  "Front-end ~30% mais rápido (imagens, minificação, cache).",
+  "Docker + Nginx + GitHub Actions + Route 53 na AWS; Contentful como CMS."]},
+ {quando:"durante a graduação",cargo:"Monitor",onde:"UFCG",itens:[
+  "Programação I e Cálculo I/II: mais de 40 alunos atendidos, correção e materiais de apoio."]}
+];
+const SKILLS={
+ "Linguagens":"Go, Clojure, Python, Java, Kotlin, TypeScript, JavaScript, C, C++, Haskell, Prolog, SQL, Bash",
+ "Web":"React, Next.js, Node.js, MapLibre GL, Spring Boot, Android/Compose",
+ "Infra & DevOps":"AWS (EC2, Route 53, VPN), Docker, Kubernetes, Nginx, GitHub Actions, Tekton, Linux",
+ "Dados":"PostgreSQL, Datomic, SQLite, Redis",
+ "Sistemas":"Cache, concorrência, I/O e armazenamento, serialização/compressão, benchmarking",
+ "Idiomas":"Português (nativo), Inglês (avançado profissional)"
+};
+const ARQ={
+ "sobre.txt":()=>cmds.sobre(),"skills.txt":()=>cmds.skills(),"contato.txt":()=>cmds.contato(),
+ "experiencia.log":()=>cmds.experiencia(),"formacao.txt":()=>cmds.formacao(),"projetos/":null
+};
+const BANNER=[" _      ___  ","| |    / _ \\","| |   | | | |","| |___| |_| |","|_____|\\__\\_\\"].join("\n");
+
+/* ---------- saída ---------- */
+function imp(html,cls){const d=document.createElement("div");if(cls)d.className=cls;d.innerHTML=html;saida.appendChild(d);rol.scrollTop=rol.scrollHeight;return d}
+const nl=()=>imp("&nbsp;");
+async function digitar(html,ms=8){ // efeito de máquina de escrever (só texto simples)
+  if(reduzir||pulou){return imp(html)}
+  const d=imp("");const t=document.createElement("div");t.innerHTML=html;const txt=t.textContent;
+  for(let i=0;i<=txt.length;i++){d.textContent=txt.slice(0,i);rol.scrollTop=rol.scrollHeight;if(pulou)break;await dormir(ms)}
+  d.innerHTML=html;return d}
+
+/* ---------- comandos ---------- */
+const cmds={
+ ajuda(){
+  imp(`<span class="hl">Comandos disponíveis</span> <span class="dim">(clique ou digite; Tab completa, ↑/↓ histórico)</span>`);
+  const l=[["sobre","quem sou eu"],["experiencia","onde trabalhei"],["projetos","lista de projetos (use: projeto &lt;nome&gt;)"],["skills","tecnologias"],["formacao","estudos e atividades"],
+   ["contato","como falar comigo"],["ls / cat","explore os arquivos"],["neofetch","info do 'sistema'"],["tema","verde | ambar | branco | azul"],
+   ["jogar","snake no terminal"],["fortune","uma frase aleatória"],["historia","linha do tempo"],["limpar","limpa a tela"],["cv","resumo para recrutadores"]];
+  l.forEach(([c,d])=>imp(`  ${C(c.split(" ")[0],c.padEnd(12))} <span class="dim">${d}</span>`));
+  imp(`<span class="dim">Dica: tem uns segredinhos escondidos por aí. 👀</span>`)},
+ help(){cmds.ajuda()},
+ sobre(){
+  imp(`<span class="hl">Lázaro Queiroz do Nascimento</span>`);
+  imp(`Estudante de Ciência da Computação na UFCG (CRA 9,5/10) e engenheiro de software no NuFuturo, o programa de P&D entre UFCG e Nubank.`);
+  imp(`Gosto de sistemas que precisam ser rápidos: caches, I/O, concorrência, armazenamento e a infraestrutura em volta. Escrevo Go e Clojure no trabalho, e no tempo livre faço ferramentas de terminal, apps Android e coisas esquisitas como um editor em Haskell + Prolog.`);
+  imp(`Também sou monitor de Programação e Cálculo, então gosto de explicar o que faço.`);
+  imp(`<span class="dim">Próximos passos:</span> ${C("experiencia")} · ${C("projetos")} · ${C("contato")}`)},
+ experiencia(){
+  EXP.forEach(e=>{nl();imp(`<span class="hl">${esc(e.cargo)}</span> @ ${esc(e.onde)}`);imp(`<span class="dim">${esc(e.quando)}</span>`);e.itens.forEach(i=>imp(`  ▸ ${esc(i)}`))})},
+ exp(){cmds.experiencia()},
+ projetos(){
+  imp(`<span class="hl">Projetos</span> <span class="dim">— digite</span> projeto &lt;nome&gt; <span class="dim">para detalhes</span>`);
+  PROJ.forEach(p=>imp(`  ${C("projeto "+p.id,p.id.padEnd(18))} <span class="dim">${esc(p.tec)}</span>`));
+  nl();imp(`<span class="dim">Todos os repositórios públicos:</span> ${L(GH+"?tab=repositories","github.com/LazaroQueiroz")}`)},
+ projeto(a){
+  const p=PROJ.find(x=>x.id===(a[0]||"").toLowerCase()||x.nome.toLowerCase()===a.join(" ").toLowerCase());
+  if(!a.length)return cmds.projetos();
+  if(!p)return imp(`projeto: '${esc(a.join(" "))}' não encontrado. Tente ${C("projetos")}.`,"err");
+  imp(`<span class="hl">${esc(p.nome)}</span>`);imp(`<span class="dim">${esc(p.tec)}</span>`);imp(esc(p.d));
+  imp(p.url?`Código: ${L(p.url)}`:`<span class="dim">(código privado ou institucional; posso explicar numa conversa)</span>`)},
+ skills(){
+  imp(`<span class="hl">Skills</span>`);
+  for(const[k,v]of Object.entries(SKILLS)){imp(`<span class="hl">${esc(k.padEnd(15))}</span> ${esc(v)}`)}
+  },
+ formacao(){
+  imp(`<span class="hl">Bacharelado em Ciência da Computação</span> — UFCG`);
+  imp(`<span class="dim">jun 2023 — jun 2027 (previsto) · CRA 9,5/10</span>`);
+  imp(`  Sistemas Operacionais, Sistemas Distribuídos, Algoritmos, Estruturas de Dados, Banco de Dados, POO, Engenharia de Software.`);
+  nl();imp(`<span class="hl">Outras atividades</span>`);
+  imp(`  ▸ Monitoria: Programação I, Cálculo I, Cálculo II, Cálculo Vetorial`);
+  imp(`  ▸ OBI/OPI: medalha de bronze por equipe, classificado para a fase nacional`);
+  imp(`  ▸ TEAjudo (Campus Mobile): protótipo de plataforma de apoio a famílias de crianças autistas`)},
+ contato(){
+  imp(`<span class="hl">Vamos conversar?</span>`);
+  imp(`  GitHub    ${L(GH,"github.com/LazaroQueiroz")}`);
+  imp(`  LinkedIn  ${L("https://linkedin.com/in/lazaro-queiroz-do-nascimento","linkedin.com/in/lazaro-queiroz-do-nascimento")}`);
+  imp(`  E-mail    ${L("mailto:lazaro.queiroz.nascimento@ccc.ufcg.edu.br","lazaro.queiroz.nascimento@ccc.ufcg.edu.br")}`);
+  imp(`  Local     Campina Grande, PB — Brasil`)},
+ cv(){
+  imp(`<span class="hl">TL;DR</span>`);
+  imp(`  Engenheiro de Software · Go, Clojure, TypeScript · caches, I/O, AWS, CI/CD`);
+  imp(`  56M+ requisições simuladas em <3 min · −75% de tempo com concorrência · −85% de latência no cache de mapas`);
+  imp(`  UFCG · CRA 9,5 · formatura prevista 06/2027 · inglês avançado`)},
+ historia(){
+  [["2023","Entro em Ciência da Computação na UFCG."],["2024","Começo no OCA e no NuFuturo (web, mapas, Docker); viro monitor."],
+   ["2025","Engenheiro de software no P&D UFCG–Nubank: Go, Clojure, caches."],["2026","Apps Android, ferramentas de terminal e este site."],["2027","Formatura. E depois? Quem sabe uma conversa contigo?"]]
+   .forEach(([a,t])=>imp(`<span class="hl">${a}</span> ─── ${esc(t)}`))},
+ ls(a){
+  if(a[0]&&a[0].replace(/\/$/,"")==="projetos")return imp(PROJ.map(p=>C("cat projetos/"+p.id,p.id+".md")).join("  "));
+  imp(Object.keys(ARQ).map(f=>C(f.endsWith("/")?"ls "+f:"cat "+f,f)).join("  "))},
+ cat(a){
+  const f=(a[0]||"").replace(/^\.\//,"");
+  if(!f)return imp("uso: cat &lt;arquivo&gt;","err");
+  if(f.startsWith("projetos/")){return cmds.projeto([f.slice(9).replace(/\.md$/,"")])}
+  if(ARQ[f])return ARQ[f]();
+  if(f==="/etc/passwd")return imp("lazaro:x:1000:1000:Lázaro:/home/lazaro:/bin/zsh<br>(boa tentativa 😉)");
+  imp(`cat: ${esc(f)}: arquivo ou diretório inexistente`,"err")},
+ cd(a){imp(a[0]?`cd: ${esc(a[0])}: aqui todo mundo fica em ~. Use ${C("ls")}.`:"~")},
+ pwd(){imp("/home/visitante/lazaro")},
+ whoami(){imp("visitante (mas espero que vire contato 😄)")},
+ date(){imp(new Date().toString())},
+ echo(a){imp(esc(a.join(" ")))},
+ neofetch(){
+  const up=Math.floor((Date.now()-T0)/1000);
+  const info=[`<span class="hl">lazaro</span>@<span class="hl">portfolio</span>`,"-----------------","SO: Arch Linux (btw)","Host: UFCG · Campina Grande","Kernel: curiosidade 6.0",
+   "Shell: zsh + neovim","Linguagens: Go, Clojure, TS, Py","Cargo: Eng. de Software","Uptime visita: "+up+"s","CRA: 9,5 / 10"];
+  const arte=["      /\\      ","     /  \\     ","    /\\   \\    ","   /      \\   ","  /   ,,   \\  "," /   |  |  -\\ ","/_-''    ''-_\\"];
+  const n=Math.max(arte.length,info.length);let s="";
+  for(let i=0;i<n;i++)s+=`<span class="hl">${esc((arte[i]||"").padEnd(17))}</span>${info[i]||""}\n`;
+  imp(s.trimEnd())},
+ tema(a){
+  const t=(a[0]||"").toLowerCase().replace("âmbar","ambar");
+  if(!["verde","ambar","branco","azul"].includes(t))return imp(`uso: tema ${["verde","ambar","branco","azul"].map(x=>C("tema "+x,x)).join(" | ")}`);
+  tela.dataset.tema=t;document.querySelector('meta[name=theme-color]').content=getComputedStyle(tela).getPropertyValue("--bg").trim();
+  try{localStorage.setItem("tema",t)}catch(e){}imp(`tema: ${t}`)},
+ limpar(){saida.innerHTML=""},clear(){cmds.limpar()},cls(){cmds.limpar()},
+ fortune(){
+  const f=["Cache é a arte de lembrar o que importa e esquecer o resto.","Existem duas coisas difíceis em computação: invalidar cache, nomear coisas e erros de off-by-one.","Prematura otimização é a raiz de todo mal. Medir antes é a raiz de todo bem.",
+   "Funciona na minha máquina. (Então vamos enviar a minha máquina.) — Docker","Todo sistema distribuído é um sistema onde a falha de uma máquina que você nem sabia que existia impede seu trabalho.","git commit -m 'arrumei'",
+   "Se está lento, é I/O. Se não é I/O, é I/O que você ainda não encontrou."];
+  imp(esc(f[Math.floor(Math.random()*f.length)]))},
+ sudo(){imp("visitante não está no arquivo sudoers. Este incidente será reportado. 🚨","err")},
+ rm(a){imp(a.join(" ").includes("-rf")?"rm: tentou mesmo, hein? Nada foi apagado. Nada foi apagado!":"rm: operação não permitida em portfólios","err")},
+ vim(){imp("Você entrou no vim. Boa sorte para sair. (Dica: é só recarregar a página 😈) Ou conheça o "+C("projeto wvim","wvim")+".")},
+ nvim(){cmds.vim()},exit(){imp("Não vá embora! Olha o "+C("contato")+" primeiro. 🙂")},
+ matrix(){chuva()},
+ jogar(){snake()},snake(){snake()},
+ ping(){imp("PONG — latência: ~85% menor que o cache de mapas anterior 😎")},
+ hello(){imp("Olá! Digite "+C("ajuda")+" para começar.")},oi(){cmds.hello()},
+ konami(){imp("↑ ↑ ↓ ↓ ← → ← → B A — você sabe das coisas. Que tal "+C("jogar")+"?")}
+};
+cmds.ola=cmds.hello;cmds["?"]=cmds.ajuda;cmds.about=cmds.sobre;cmds.projects=cmds.projetos;cmds.contact=cmds.contato;cmds.skill=cmds.skills;
+const NOMES=Object.keys(cmds).filter(c=>!["?","help","cls","clear","exp","skill","about","projects","contact","ola","hello","oi","nvim","konami"].includes(c));
+
+/* ---------- efeitos e jogo ---------- */
+let rodando=null; // loop do jogo/matrix
+function chuva(){
+  const cv=document.createElement("canvas");cv.width=Math.min(640,rol.clientWidth-44);cv.height=200;cv.style.cssText="display:block;max-width:100%;border:1px solid var(--dim)";
+  const x=cv.getContext("2d");const cols=Math.floor(cv.width/12);const y=Array(cols).fill(0);const d=imp("");d.appendChild(cv);imp(`<span class="dim">(qualquer tecla para sair)</span>`);
+  const cor=getComputedStyle(tela).getPropertyValue("--fg").trim();let n=0;
+  rodando={tecla(){clearInterval(i);rodando=null},fim:true};
+  const i=setInterval(()=>{x.fillStyle="rgba(0,0,0,.12)";x.fillRect(0,0,cv.width,cv.height);x.fillStyle=cor;x.font="12px monospace";
+    y.forEach((v,k)=>{x.fillText(String.fromCharCode(0x30A0+Math.random()*96),k*12,v*12);y[k]=v*12>cv.height&&Math.random()>.95?0:v+1});if(++n>400){clearInterval(i);rodando=null}},60)}
+
+function snake(){
+  const W=28,H=14;let cobra=[[5,7],[4,7],[3,7]],dir=[1,0],prox=[1,0],comida=[18,7],pts=0,vivo=true;
+  let rec=0;try{rec=+localStorage.getItem("snake")||0}catch(e){}
+  const pre=document.createElement("pre");pre.className="jogo";const box=imp("");box.appendChild(pre);
+  const info=imp("");
+  const ctl=document.createElement("div");ctl.className="ctl";
+  [["",""],["▲","c"],["",""],["◀","a"],["▼","b"],["▶","d"]].forEach(([t,k])=>{const b=document.createElement("button");b.textContent=t;b.style.visibility=t?"visible":"hidden";
+    b.addEventListener("pointerdown",e=>{e.preventDefault();mover(k==="c"?[0,-1]:k==="b"?[0,1]:k==="a"?[-1,0]:[1,0])});ctl.appendChild(b)});
+  const wrap=imp("");wrap.appendChild(ctl);
+  function mover(d){if(d[0]!==-dir[0]||d[1]!==-dir[1])prox=d}
+  function soltar(){const c=[0,0];do{c[0]=Math.floor(Math.random()*W);c[1]=Math.floor(Math.random()*H)}while(cobra.some(s=>s[0]===c[0]&&s[1]===c[1]));comida=c}
+  function desenhar(){
+    let s="┌"+"─".repeat(W)+"┐\n";
+    for(let j=0;j<H;j++){s+="│";for(let i=0;i<W;i++){s+=cobra[0][0]===i&&cobra[0][1]===j?"@":cobra.some(p=>p[0]===i&&p[1]===j)?"o":comida[0]===i&&comida[1]===j?"*":" "}s+="│\n"}
+    pre.textContent=s+"└"+"─".repeat(W)+"┘";info.textContent=vivo?`pontos: ${pts}   recorde: ${rec}   (setas/WASD, q sai)`:`GAME OVER — ${pts} pontos${pts>rec?" · NOVO RECORDE!":""}. Digite 'jogar' para tentar de novo.`}
+  function fim(){clearInterval(t);rodando=null;if(pts>rec){try{localStorage.setItem("snake",pts)}catch(e){}}desenhar();ent.focus()}
+  function passo(){
+    dir=prox;const c=[cobra[0][0]+dir[0],cobra[0][1]+dir[1]];
+    if(c[0]<0||c[1]<0||c[0]>=W||c[1]>=H||cobra.some(s=>s[0]===c[0]&&s[1]===c[1])){vivo=false;return fim()}
+    cobra.unshift(c);if(c[0]===comida[0]&&c[1]===comida[1]){pts++;soltar()}else cobra.pop();desenhar()}
+  rodando={tecla(e){const m={ArrowUp:[0,-1],w:[0,-1],ArrowDown:[0,1],s:[0,1],ArrowLeft:[-1,0],a:[-1,0],ArrowRight:[1,0],d:[1,0]}[e.key];
+    if(m){mover(m)}else if(e.key==="q"||e.key==="Escape"){vivo=false;fim()}}};
+  const t=setInterval(passo,110);desenhar()}
+
+/* ---------- terminal ---------- */
+const T0=Date.now();let pulou=false,hist=[],hi=0;
+const PS=()=>"visitante@lazaro:~$";
+function mostrarPrompt(){pr.textContent=PS();linha.hidden=false;ent.focus({preventScroll:true});rol.scrollTop=rol.scrollHeight}
+async function executar(txt){
+  const bruto=txt.trim();
+  imp(`<span class="hl">${PS()}</span> ${esc(txt)}`);
+  if(!bruto)return;
+  hist.push(bruto);hi=hist.length;
+  const [c,...a]=bruto.split(/\s+/);const f=cmds[c.toLowerCase()];
+  if(Object.prototype.hasOwnProperty.call(cmds,c.toLowerCase())&&typeof f==="function")f(a);
+  else{const sug=NOMES.filter(n=>n.startsWith(c.toLowerCase().slice(0,2)))[0];imp(`${esc(c)}: comando não encontrado. ${sug?`Quis dizer ${C(sug)}? `:""}Digite ${C("ajuda")}.`,"err")}
+}
+ent.addEventListener("keydown",e=>{
+  if(rodando){e.preventDefault();rodando.tecla&&rodando.tecla(e);if(rodando&&rodando.fim)return;return}
+  if(e.key==="Enter"){const v=ent.value;ent.value="";executar(v)}
+  else if(e.key==="ArrowUp"){e.preventDefault();if(hi>0){hi--;ent.value=hist[hi]}}
+  else if(e.key==="ArrowDown"){e.preventDefault();if(hi<hist.length-1){hi++;ent.value=hist[hi]}else{hi=hist.length;ent.value=""}}
+  else if(e.key==="Tab"){e.preventDefault();const p=ent.value.split(/\s+/);
+    if(p.length===1){const m=NOMES.filter(n=>n.startsWith(p[0].toLowerCase()));if(m.length===1)ent.value=m[0]+" ";else if(m.length>1)imp(m.join("  "),"dim")}
+    else if(p[0]==="projeto"||p[0]==="cat"){const base=p[0]==="cat"?PROJ.map(x=>"projetos/"+x.id).concat(Object.keys(ARQ)):PROJ.map(x=>x.id);const m=base.filter(n=>n.startsWith(p[1]||""));if(m.length===1)ent.value=p[0]+" "+m[0];else if(m.length>1)imp(m.join("  "),"dim")}}
+  else if(e.key==="l"&&e.ctrlKey){e.preventDefault();cmds.limpar()}
+});
+document.addEventListener("keydown",e=>{
+  if(!linha.hidden&&rodando&&document.activeElement!==ent){rodando.tecla&&rodando.tecla(e)}
+  if(!bootFeito){pulou=true}
+},true);
+saida.addEventListener("click",e=>{const c=e.target.closest(".cmd");if(c&&!rodando){executar(c.dataset.cmd)}});
+tela.addEventListener("pointerdown",e=>{if(!bootFeito)pulou=true});
+tela.addEventListener("click",e=>{if(bootFeito&&!getSelection().toString()&&!e.target.closest("a,button,.cmd"))ent.focus({preventScroll:true})});
+["sobre","experiencia","projetos","skills","contato","ajuda","tema azul"].forEach(c=>{const b=document.createElement("button");b.textContent=c;b.onclick=()=>{if(!bootFeito){pulou=true;return}if(rodando){return}executar(c);ent.focus({preventScroll:true})};atalhos.appendChild(b)});
+
+let bootFeito=false;
+async function boot(){
+  try{const t=localStorage.getItem("tema");if(t)tela.dataset.tema=t}catch(e){}
+  const linhas=["LQ-BIOS v2.7  (C) 2026 Lázaro Queiroz Systems","CPU: Go-486DX @ 66MHz ........ OK","Memória: 640K ................. OK  (deveria bastar)",
+   "Cache L1/L2 (LRU, LFU, ÓTIMO) . OK","Montando /home/lazaro ......... OK","Carregando projetos ........... OK","Conectando à internet ......... 56k modem 📞 OK"];
+  if(!pulou&&!reduzir)for(const l of linhas){imp(esc(l));await dormir(pulou?0:230)}
+  else linhas.forEach(l=>imp(esc(l)));
+  nl();imp(`<span class="hl">${esc(BANNER)}</span>`);
+  imp(`<span class="hl">Lázaro Queiroz do Nascimento</span> <span class="dim">— Engenheiro de Software · UFCG</span>`);
+  imp(`<span class="dim">Sistemas distribuídos · caches · Go · Clojure · DevOps</span>`);
+  nl();imp(`Bem-vindo(a)! Digite ${C("ajuda")} ou clique em um comando: ${C("sobre")} · ${C("projetos")} · ${C("experiencia")} · ${C("contato")}`);nl();
+  bootFeito=true;$("#dica").hidden=true;mostrarPrompt();
+  const q=decodeURIComponent(location.hash.slice(1));if(q&&cmds[q.split(" ")[0]])executar(q)}
+boot();
+})();
+</script>
+</body>
+</html>
